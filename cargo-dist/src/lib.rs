@@ -955,6 +955,7 @@ fn generate_installer(
         }
         InstallerImpl::Msi(info) => info.build(dist)?,
         InstallerImpl::Pkg(info) => info.build()?,
+        InstallerImpl::PypiWheel(info) => installer::pypi_wheel::write_wheel(dist, info)?,
     }
     Ok(())
 }

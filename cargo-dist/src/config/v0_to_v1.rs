@@ -341,6 +341,7 @@ impl DistMetadata {
             powershell: powershell_installer_layer,
             shell: shell_installer_layer,
             pkg: pkg_installer_layer,
+            pypi_wheel: None,
             updater: install_updater,
             always_use_latest_updater,
         });
@@ -350,11 +351,14 @@ impl DistMetadata {
             list_to_bool_layer(is_global, &publish_jobs, PublishStyle::Homebrew, || None);
         let npm_publisher_layer =
             list_to_bool_layer(is_global, &publish_jobs, PublishStyle::Npm, || None);
+        let pypi_publisher_layer =
+            list_to_bool_layer(is_global, &publish_jobs, PublishStyle::Pypi, || None);
         let user_layer = list_to_bool_layer_predicate(is_global, &publish_jobs, |job| {
             matches!(job, PublishStyle::User(_))
         });
         let needs_publisher_layer = homebrew_publisher_layer.is_some()
             || npm_publisher_layer.is_some()
+            || pypi_publisher_layer.is_some()
             || user_layer.is_some()
             || publish_prereleases.is_some();
         let publisher_layer = needs_publisher_layer.then_some(PublisherLayer {
@@ -363,6 +367,7 @@ impl DistMetadata {
             },
             homebrew: homebrew_publisher_layer,
             npm: npm_publisher_layer,
+            pypi: pypi_publisher_layer,
             user: user_layer,
         });
 

@@ -187,6 +187,8 @@ pub enum InstallerStyle {
     Msi,
     /// Generate an Apple pkg installer that embeds the binary
     Pkg,
+    /// Generate a Python wheel that embeds the binary
+    PypiWheel,
 }
 
 impl std::fmt::Display for InstallerStyle {
@@ -198,6 +200,7 @@ impl std::fmt::Display for InstallerStyle {
             InstallerStyle::Homebrew => "homebrew",
             InstallerStyle::Msi => "msi",
             InstallerStyle::Pkg => "pkg",
+            InstallerStyle::PypiWheel => "pypi-wheel",
         };
         string.fmt(f)
     }
@@ -267,6 +270,8 @@ pub enum PublishStyle {
     Homebrew,
     /// Publish an npm pkg to the global npm registry
     Npm,
+    /// Publish Python wheels to PyPI
+    Pypi,
     /// User-supplied value
     User(String),
 }
@@ -280,6 +285,8 @@ impl std::str::FromStr for PublishStyle {
             Ok(Self::Homebrew)
         } else if s == "npm" {
             Ok(Self::Npm)
+        } else if s == "pypi" {
+            Ok(Self::Pypi)
         } else {
             Err(DistError::UnrecognizedJobStyle {
                 style: s.to_owned(),
@@ -305,6 +312,7 @@ impl std::fmt::Display for PublishStyle {
         match self {
             PublishStyle::Homebrew => write!(f, "homebrew"),
             PublishStyle::Npm => write!(f, "npm"),
+            PublishStyle::Pypi => write!(f, "pypi"),
             PublishStyle::User(s) => write!(f, "./{s}"),
         }
     }

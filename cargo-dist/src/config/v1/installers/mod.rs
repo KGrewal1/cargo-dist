@@ -5,6 +5,7 @@ pub mod msi;
 pub mod npm;
 pub mod pkg;
 pub mod powershell;
+pub mod pypi_wheel;
 pub mod shell;
 
 use super::*;
@@ -14,6 +15,7 @@ use msi::*;
 use npm::*;
 use pkg::*;
 use powershell::*;
+use pypi_wheel::*;
 use shell::*;
 
 /// workspace installer config (final)
@@ -37,8 +39,10 @@ pub struct AppInstallerConfig {
     pub powershell: Option<PowershellInstallerConfig>,
     /// shell installer
     pub shell: Option<ShellInstallerConfig>,
-    /// shell installer
+    /// pkg installer
     pub pkg: Option<PkgInstallerConfig>,
+    /// pypi_wheel installer
+    pub pypi_wheel: Option<PypiWheelInstallerConfig>,
 }
 
 /// installer config (inheritance not yet applied)
@@ -58,6 +62,8 @@ pub struct InstallerConfigInheritable {
     pub shell: Option<ShellInstallerLayer>,
     /// pkg installer
     pub pkg: Option<PkgInstallerLayer>,
+    /// pypi_wheel installer
+    pub pypi_wheel: Option<PypiWheelInstallerLayer>,
     /// Whether to install an updater program alongside the software
     pub updater: bool,
     /// Whether to always use the latest version instead of a fixed version
@@ -83,6 +89,8 @@ pub struct InstallerLayer {
     pub shell: Option<BoolOr<ShellInstallerLayer>>,
     /// pkg installer
     pub pkg: Option<BoolOr<PkgInstallerLayer>>,
+    /// pypi_wheel installer
+    pub pypi_wheel: Option<BoolOr<PypiWheelInstallerLayer>>,
     /// Whether to install an updater program alongside the software
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updater: Option<bool>,
@@ -109,6 +117,7 @@ impl InstallerConfigInheritable {
             powershell: None,
             shell: None,
             pkg: None,
+            pypi_wheel: None,
             updater: false,
             always_use_latest_updater: false,
         }
@@ -130,6 +139,7 @@ impl InstallerConfigInheritable {
             powershell: _,
             shell: _,
             pkg: _,
+            pypi_wheel: _,
         } = self;
 
         WorkspaceInstallerConfig {
@@ -151,6 +161,7 @@ impl InstallerConfigInheritable {
             powershell,
             shell,
             pkg,
+            pypi_wheel,
             // global-only
             updater: _,
             always_use_latest_updater: _,
@@ -191,6 +202,12 @@ impl InstallerConfigInheritable {
             default.apply_layer(pkg);
             default
         });
+        let pypi_wheel = pypi_wheel.map(|pypi_wheel| {
+            let mut default =
+                PypiWheelInstallerConfig::defaults_for_package(workspaces, pkg_idx, &common);
+            default.apply_layer(pypi_wheel);
+            default
+        });
         AppInstallerConfig {
             homebrew,
             msi,
@@ -198,6 +215,7 @@ impl InstallerConfigInheritable {
             powershell,
             shell,
             pkg,
+            pypi_wheel,
         }
     }
 }
@@ -213,6 +231,7 @@ impl ApplyLayer for InstallerConfigInheritable {
             powershell,
             shell,
             pkg,
+            pypi_wheel,
             updater,
             always_use_latest_updater,
         }: Self::Layer,
@@ -224,6 +243,7 @@ impl ApplyLayer for InstallerConfigInheritable {
         self.powershell.apply_bool_layer(powershell);
         self.shell.apply_bool_layer(shell);
         self.pkg.apply_bool_layer(pkg);
+        self.pypi_wheel.apply_bool_layer(pypi_wheel);
         self.updater.apply_val(updater);
         self.always_use_latest_updater
             .apply_val(always_use_latest_updater);

@@ -301,12 +301,21 @@ impl GithubCiInfo {
         root_permissions.insert("contents".to_owned(), GithubPermission::Write);
 
         let mut publish_jobs = vec![];
-        if let Some(PublisherConfig { homebrew, npm, .. }) = &dist.global_publishers {
+        if let Some(PublisherConfig {
+            homebrew,
+            npm,
+            pypi,
+            ..
+        }) = &dist.global_publishers
+        {
             if homebrew.is_some() {
                 publish_jobs.push(PublishStyle::Homebrew.to_string());
             }
             if npm.is_some() {
                 publish_jobs.push(PublishStyle::Npm.to_string());
+            }
+            if pypi.is_some() {
+                publish_jobs.push(PublishStyle::Pypi.to_string());
             }
         }
 

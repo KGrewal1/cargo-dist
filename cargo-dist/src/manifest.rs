@@ -47,7 +47,11 @@ use crate::{
     announce::AnnouncementTag,
     backend::{
         installer::{
-            homebrew::HomebrewInstallerInfo, npm::NpmInstallerInfo, HomebrewImpl, InstallerImpl,
+            homebrew::HomebrewInstallerInfo,
+            npm::NpmInstallerInfo,
+            pypi_wheel::PypiWheelInstallerInfo,
+            HomebrewImpl,
+            InstallerImpl,
         },
         templates::{TemplateEntry, TEMPLATE_INSTALLER_NPM},
     },
@@ -349,7 +353,8 @@ fn add_manifest_artifact(
                 info: HomebrewInstallerInfo { inner: info, .. },
                 ..
             })
-            | InstallerImpl::Npm(NpmInstallerInfo { inner: info, .. }),
+            | InstallerImpl::Npm(NpmInstallerInfo { inner: info, .. })
+            | InstallerImpl::PypiWheel(PypiWheelInstallerInfo { inner: info, .. }),
         ) => {
             install_hint = Some(info.hint.clone());
             description = Some(info.desc.clone());

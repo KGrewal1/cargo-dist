@@ -2,12 +2,14 @@
 
 pub mod homebrew;
 pub mod npm;
+pub mod pypi;
 pub mod user;
 
 use super::*;
 
 use homebrew::*;
 use npm::*;
+use pypi::*;
 use user::*;
 
 /// the final publisher config
@@ -17,6 +19,8 @@ pub struct PublisherConfig {
     pub homebrew: Option<HomebrewPublisherConfig>,
     /// npm publisher
     pub npm: Option<NpmPublisherConfig>,
+    /// pypi publisher
+    pub pypi: Option<PypiPublisherConfig>,
     /// user specified publisher
     pub user: Option<UserPublisherConfig>,
 }
@@ -32,6 +36,8 @@ pub struct PublisherConfigInheritable {
     pub homebrew: Option<HomebrewPublisherLayer>,
     /// npm publisher
     pub npm: Option<NpmPublisherLayer>,
+    /// pypi publisher
+    pub pypi: Option<PypiPublisherLayer>,
     /// user specified publisher
     pub user: Option<UserPublisherLayer>,
 }
@@ -46,6 +52,8 @@ pub struct PublisherLayer {
     pub homebrew: Option<BoolOr<HomebrewPublisherLayer>>,
     /// npm publisher
     pub npm: Option<BoolOr<NpmPublisherLayer>>,
+    /// pypi publisher
+    pub pypi: Option<BoolOr<PypiPublisherLayer>>,
     /// user-specified publisher
     pub user: Option<BoolOr<UserPublisherLayer>>,
 }
@@ -56,6 +64,7 @@ impl PublisherConfigInheritable {
             common: CommonPublisherConfig::defaults_for_package(workspaces, pkg_idx),
             homebrew: None,
             npm: None,
+            pypi: None,
             user: None,
         }
     }
@@ -69,6 +78,7 @@ impl PublisherConfigInheritable {
             common,
             homebrew,
             npm,
+            pypi,
             user,
         } = self;
         let homebrew = homebrew.map(|homebrew| {
@@ -83,6 +93,12 @@ impl PublisherConfigInheritable {
             default.apply_layer(npm);
             default
         });
+        let pypi = pypi.map(|pypi| {
+            let mut default =
+                PypiPublisherConfig::defaults_for_package(workspaces, pkg_idx, &common);
+            default.apply_layer(pypi);
+            default
+        });
         let user = user.map(|user| {
             let mut default =
                 UserPublisherConfig::defaults_for_package(workspaces, pkg_idx, &common);
@@ -92,6 +108,7 @@ impl PublisherConfigInheritable {
         PublisherConfig {
             homebrew,
             npm,
+            pypi,
             user,
         }
     }
@@ -104,12 +121,14 @@ impl ApplyLayer for PublisherConfigInheritable {
             common,
             homebrew,
             npm,
+            pypi,
             user,
         }: Self::Layer,
     ) {
         self.common.apply_layer(common);
         self.homebrew.apply_bool_layer(homebrew);
         self.npm.apply_bool_layer(npm);
+        self.pypi.apply_bool_layer(pypi);
         self.user.apply_bool_layer(user);
     }
 }

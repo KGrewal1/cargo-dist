@@ -88,6 +88,7 @@ use crate::{
             homebrew::{to_class_case, HomebrewInstallerInfo},
             msi::MsiInstallerInfo,
             npm::NpmInstallerInfo,
+            pypi_wheel::PypiWheelInstallerInfo,
             InstallerImpl, InstallerInfo,
         },
         templates::Templates,
@@ -1153,12 +1154,14 @@ impl<'pkg_graph> DistGraphBuilder<'pkg_graph> {
                 let PublisherConfig {
                     homebrew,
                     npm,
+                    pypi,
                     user,
                 } = p;
                 let h_pre = homebrew.as_ref().map(|p| p.prereleases);
                 let npm_pre = npm.as_ref().map(|p| p.prereleases);
+                let pypi_pre = pypi.as_ref().map(|p| p.prereleases);
                 let user_pre = user.as_ref().map(|p| p.prereleases);
-                let choices = [h_pre, npm_pre, user_pre];
+                let choices = [h_pre, npm_pre, pypi_pre, user_pre];
                 let mut global_choice = None;
                 #[allow(clippy::manual_flatten)]
                 for choice in choices {
@@ -2453,6 +2456,123 @@ impl<'pkg_graph> DistGraphBuilder<'pkg_graph> {
         Ok(())
     }
 
+    fn add_pypi_wheel_installer(&mut self, to_release: ReleaseIdx) -> DistResult<()> {
+        if !self.local_artifacts_enabled() {
+            return Ok(());
+        }
+
+        let release = self.release(to_release);
+        let Some(config) = &release.config.installers.pypi_wheel else {
+            return Ok(());
+        };
+        require_nonempty_installer(release, config)?;
+
+        // Get release metadata
+        let package_name = release.app_name.clone();
+        let package_version = release.version.to_string();
+        let package_desc = release.app_desc.clone();
+        let package_license = release.app_license.clone();
+        let package_authors = release.app_authors.clone();
+        let homepage_url = release.app_homepage_url.clone();
+
+        let schema_release = self
+            .manifest
+            .release_by_name(&release.app_name)
+            .expect("couldn't find the release!?");
+        let download_url = schema_release
+            .artifact_download_url()
+            .expect("couldn't compute a URL to download artifacts from!?");
+        let hosting = schema_release.hosting.clone();
+
+        let variants = release.variants.clone();
+        let platform_support_fragments = release.platform_support.fragments();
+        let bin_aliases_map = config.bin_aliases.clone();
+        let install_path = config.install_path.clone();
+        let install_success_msg = config.install_success_msg.clone();
+        let install_libraries = config.install_libraries.clone();
+
+        // Create one wheel per platform
+        for variant_idx in variants {
+            let variant = self.variant(variant_idx);
+            let target_triple = variant.target.clone();
+
+            // Get platform-specific artifacts
+            let artifacts = platform_support_fragments
+                .iter()
+                .filter(|f| f.target_triple == target_triple)
+                .cloned()
+                .collect::<Vec<_>>();
+
+            if artifacts.is_empty() {
+                continue;
+            }
+
+            let bin_aliases =
+                BinaryAliases(bin_aliases_map.clone()).for_targets(&[target_triple.clone()]);
+
+            let runtime_conditions = artifacts
+                .get(0)
+                .map(|a| a.runtime_conditions.clone())
+                .unwrap_or_default();
+
+            // Generate wheel filename
+            let normalized_name = package_name.replace('-', "_");
+            let artifact_name = ArtifactId::new(format!(
+                "{}-{}-py3-none-{}.whl",
+                normalized_name,
+                package_version,
+                platform_tag_from_triple(&target_triple.as_str())
+            ));
+            let artifact_path = self.inner.dist_dir.join(artifact_name.as_str());
+
+            let installer_artifact = Artifact {
+                id: artifact_name,
+                target_triples: vec![target_triple.clone()],
+                file_path: artifact_path.clone(),
+                required_binaries: FastMap::new(),
+                archive: None,
+                checksum: None,
+                kind: ArtifactKind::Installer(InstallerImpl::PypiWheel(PypiWheelInstallerInfo {
+                    package_name: package_name.clone(),
+                    package_version: package_version.clone(),
+                    package_desc: package_desc.clone(),
+                    package_license: package_license.clone(),
+                    package_authors: package_authors.clone(),
+                    homepage_url: homepage_url.clone(),
+                    target_triple: target_triple.clone(),
+                    dest_path: self.inner.dist_dir.clone(),
+                    inner: InstallerInfo {
+                        release: to_release,
+                        dest_path: artifact_path,
+                        app_name: package_name.clone(),
+                        app_version: package_version.clone(),
+                        install_paths: install_path
+                            .iter()
+                            .map(|p| p.clone().into_jinja())
+                            .collect(),
+                        install_success_msg: install_success_msg.clone(),
+                        base_url: download_url.to_owned(),
+                        hosting: hosting.clone(),
+                        artifacts: artifacts.clone(),
+                        hint: format!("pip install {}", package_name),
+                        desc: "Install prebuilt binaries via pip".to_owned(),
+                        receipt: None,
+                        bin_aliases: bin_aliases.clone(),
+                        install_libraries: install_libraries.clone(),
+                        runtime_conditions,
+                        platform_support: None,
+                        env_vars: None,
+                    },
+                })),
+                is_global: false, // Platform-specific wheel
+            };
+
+            self.add_local_artifact(variant_idx, installer_artifact);
+        }
+
+        Ok(())
+    }
+
     fn add_msi_installer(&mut self, to_release: ReleaseIdx) -> DistResult<()> {
         if !self.local_artifacts_enabled() {
             return Ok(());
@@ -2993,6 +3113,7 @@ impl<'pkg_graph> DistGraphBuilder<'pkg_graph> {
                     InstallerStyle::Npm => self.add_npm_installer(release)?,
                     InstallerStyle::Msi => self.add_msi_installer(release)?,
                     InstallerStyle::Pkg => self.add_pkg_installer(release)?,
+                    InstallerStyle::PypiWheel => self.add_pypi_wheel_installer(release)?,
                 }
             }
 
@@ -3437,5 +3558,29 @@ fn require_nonempty_installer(release: &Release, config: &CommonInstallerConfig)
         Err(DistError::EmptyInstaller {})
     } else {
         Ok(())
+    }
+}
+
+fn platform_tag_from_triple(triple: &str) -> &'static str {
+    // Map Rust target triples to wheel platform tags
+    match triple {
+        // Linux x86_64
+        "x86_64-unknown-linux-gnu" => "manylinux_2_17_x86_64",
+        "x86_64-unknown-linux-musl" => "musllinux_1_1_x86_64",
+        // Linux aarch64
+        "aarch64-unknown-linux-gnu" => "manylinux_2_17_aarch64",
+        "aarch64-unknown-linux-musl" => "musllinux_1_1_aarch64",
+        // macOS x86_64
+        "x86_64-apple-darwin" => "macosx_10_12_x86_64",
+        // macOS aarch64 (Apple Silicon)
+        "aarch64-apple-darwin" => "macosx_11_0_arm64",
+        // Windows x86_64
+        "x86_64-pc-windows-msvc" | "x86_64-pc-windows-gnu" => "win_amd64",
+        // Windows i686
+        "i686-pc-windows-msvc" | "i686-pc-windows-gnu" => "win32",
+        // Windows aarch64
+        "aarch64-pc-windows-msvc" => "win_arm64",
+        // Fallback for unknown platforms
+        _ => "unknown",
     }
 }

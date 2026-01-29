@@ -589,6 +589,11 @@ jobs:
 {{% include 'ci/github/partials/publish_npm.yml' %}}
 {{%- endif %}}
 
+{{%- if 'pypi' in publish_jobs %}}
+
+{{% include 'ci/github/partials/publish_pypi.yml' %}}
+{{%- endif %}}
+
 {{%- for job in user_publish_jobs %}}
 
   custom-{{{ job.name|safe }}}:
@@ -628,6 +633,9 @@ jobs:
     {{%- if 'npm' in publish_jobs %}}
       - publish-npm
     {{%- endif %}}
+    {{%- if 'pypi' in publish_jobs %}}
+      - publish-pypi
+    {{%- endif %}}
     {{%- for job in user_publish_jobs %}}
       - custom-{{{ job.name|safe }}}
     {{%- endfor %}}
@@ -640,6 +648,7 @@ jobs:
     if: ${{ always() && needs.host.result == 'success'
     {{%- if 'homebrew' in publish_jobs and tap %}} && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') {{%- endif %}}
     {{%- if 'npm' in publish_jobs %}} && (needs.publish-npm.result == 'skipped' || needs.publish-npm.result == 'success') {{%- endif %}}
+    {{%- if 'pypi' in publish_jobs %}} && (needs.publish-pypi.result == 'skipped' || needs.publish-pypi.result == 'success') {{%- endif %}}
     {{%- for job in user_publish_jobs %}} && (needs.custom-{{{ job.name|safe }}}.result == 'skipped' || needs.custom-{{{ job.name|safe }}}.result == 'success') {{%- endfor %}}
     {{{- " }}" | safe }}}
     runs-on: {{{ global_task.runner }}}

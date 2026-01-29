@@ -1,0 +1,44 @@
+  publish-pypi:
+    needs:
+      - plan
+      - host
+    {%- for job in host_jobs %}
+      - custom-{{ job.name|safe }}
+    {%- endfor %}
+    runs-on: {{ global_task.runner }}
+    environment:
+      name: release
+    permissions:
+      id-token: write  # For OIDC trusted publishing
+    if: ${{ !fromJson(needs.plan.outputs.val).announcement_is_prerelease || fromJson(needs.plan.outputs.val).publish_prereleases }}
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Download Python wheels
+        uses: {{ actions["actions/download-artifact"] | safe }}
+        with:
+          pattern: artifacts-*
+          path: wheels/
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        run: |
+          # Find all wheel files
+          WHEELS=$(find wheels/ -name "*.whl")
+          if [ -z "$WHEELS" ]; then
+            echo "No wheels found to publish"
+            exit 0
+          fi
+
+          # Publish wheels
+          {%- if pypi.test_pypi %}
+          uv publish --verbose $WHEELS --publish-url https://test.pypi.org/legacy/
+          {%- elif pypi.index_url %}
+          uv publish --verbose $WHEELS --publish-url {{ pypi.index_url }}
+          {%- else %}
+          uv publish --verbose $WHEELS
+          {%- endif %}
+          {%- if not pypi.attestations %}
+          --no-attestations
+          {%- endif %}

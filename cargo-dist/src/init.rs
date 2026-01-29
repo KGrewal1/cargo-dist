@@ -767,6 +767,7 @@ fn get_new_dist_metadata(
                 InstallerStyle::Homebrew => "homebrew",
                 InstallerStyle::Msi => "msi",
                 InstallerStyle::Pkg => "pkg",
+                InstallerStyle::PypiWheel => "pypi-wheel",
             });
         }
 

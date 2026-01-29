@@ -19,12 +19,14 @@ use crate::{
 use self::homebrew::HomebrewInstallerInfo;
 use self::msi::MsiInstallerInfo;
 use self::npm::NpmInstallerInfo;
+use self::pypi_wheel::PypiWheelInstallerInfo;
 
 pub mod homebrew;
 pub mod macpkg;
 pub mod msi;
 pub mod npm;
 pub mod powershell;
+pub mod pypi_wheel;
 pub mod shell;
 
 /// A kind of an installer
@@ -43,6 +45,8 @@ pub enum InstallerImpl {
     Msi(MsiInstallerInfo),
     /// Mac pkg installer
     Pkg(PkgInstallerInfo),
+    /// Python wheel installer
+    PypiWheel(PypiWheelInstallerInfo),
 }
 
 /// Information needed to make a homebrew installer
